@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Signal — startup discovery",
+  title: "Signal",
   description: "Find tomorrow's companies through the people VCs follow.",
 };
 

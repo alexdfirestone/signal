@@ -4,6 +4,8 @@ CREATE TABLE IF NOT EXISTS tracked_accounts (
   name text NOT NULL,
   profile_image_url text,
   category text NOT NULL DEFAULT 'person',
+  followers_count bigint,
+  following_count bigint,
   last_following_ids jsonb NOT NULL DEFAULT '[]'::jsonb,
   last_checked_at timestamptz,
   created_at timestamptz NOT NULL DEFAULT now()

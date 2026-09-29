@@ -6,7 +6,9 @@
   "scripts": {
     "dev": "next dev --turbopack",
     "build": "next build",
-    "start": "next start"
+    "start": "next start",
+    "seed:investors": "node --env-file=.env.local scripts/seed-investors.mjs",
+    "verify:account": "node --env-file=.env.local scripts/verify-account-counts.mjs"
   },
   "keywords": [],
   "author": "",

@@ -1,12 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import AccountSheet, { type AccountCategory, type TrackedAccount } from "@/components/account-sheet";
+import AccountSheet, { categories, type AccountCategory, type TrackedAccount } from "@/components/account-sheet";
 
-const categoryOptions: { value: AccountCategory; label: string }[] = [
-  { value: "investor", label: "Investor" }, { value: "influencer", label: "Influencer" },
-  { value: "executive", label: "Executive" }, { value: "person", label: "Person" },
-];
+const limit = 30;
+
+function initials(name: string) { return name.split(/\s+/).map((part) => part[0]).join("").slice(0, 2).toUpperCase(); }
+function Plus() { return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M12 5v14M5 12h14"/></svg>; }
+function Trash() { return <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/></svg>; }
 
 export default function TrackedAccounts() {
   const [accounts, setAccounts] = useState<TrackedAccount[]>([]);
@@ -24,7 +25,7 @@ export default function TrackedAccounts() {
       setAccounts(result.accounts as TrackedAccount[]);
     } catch (cause) {
       const message = cause instanceof Error ? cause.message : "Could not load tracked accounts";
-      setError(message.includes("DATABASE_URL") ? "Connect Neon to load your accounts. Add an X API token to register new handles." : message);
+      setError(message.includes("DATABASE_URL") ? "Connect Neon to load your accounts." : message);
     }
     finally { setLoading(false); }
   }
@@ -58,24 +59,28 @@ export default function TrackedAccounts() {
 
   function accountAdded(account: TrackedAccount) { setAccounts((current) => [account, ...current]); setSheetOpen(false); }
 
-  return <main className="simple-page">
-    <header className="simple-top"><a className="simple-brand" href="/">signal<span>.</span></a><a className="accounts-link" href="/">← New startups</a></header>
-    <div className="simple-content accounts-content">
-      <div className="simple-date">SETTINGS</div>
-      <div className="simple-title-row"><div><h1>Tracked accounts</h1><p>Choose which public X accounts to scan and how to group them.</p></div><button className="simple-add" onClick={() => setSheetOpen(true)}>＋ Add account</button></div>
-      <div className="account-count-note">{accounts.length} of 10 accounts</div>
-      {error && <div className={error.startsWith("Connect Neon") ? "accounts-error setup-note" : "accounts-error"} role="alert">{error}</div>}
-      <section className="managed-list" aria-label="Tracked X accounts">
-        <div className="managed-header"><span>ACCOUNT</span><span>TYPE</span><span>LAST SCAN</span><span/></div>
-        {loading ? <div className="managed-empty">Loading accounts…</div> : accounts.length ? accounts.map((account) => <div className="managed-row" key={account.id}>
-          <div className="managed-person"><span className="person-initials">{account.name.split(/\s+/).map((part) => part[0]).join("").slice(0, 2)}</span><span><b>{account.name}</b><small>@{account.username}</small></span></div>
-          <label className="visually-hidden" htmlFor={`category-${account.id}`}>Type for @{account.username}</label>
-          <select id={`category-${account.id}`} value={account.category} disabled={busyId === account.id} onChange={(event) => void updateCategory(account, event.target.value as AccountCategory)}>{categoryOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select>
-          <span className="managed-scan">{account.last_checked_at ? new Date(account.last_checked_at).toLocaleDateString() : "Not scanned"}</span>
-          <button className="remove-account" onClick={() => void removeAccount(account)} disabled={busyId === account.id}>Remove</button>
-        </div>) : <div className="managed-empty">No accounts yet. Add an X account to start a follow graph.</div>}
-      </section>
-      <p className="managed-footnote">Each new account starts with a baseline. We only flag follows added after the baseline.</p>
+  const full = accounts.length >= limit;
+
+  return <main>
+    <header className="topbar"><nav className="crumbs"><a className="ghost" href="/">Signal</a><span>/</span><a className="ghost" href="/accounts">Accounts</a></nav></header>
+    <div className="content">
+      <h1>Tracked accounts</h1>
+      <p className="lede">Signal checks who these accounts follow every day · {accounts.length} of {limit}</p>
+      {error && <div className="callout" role="alert">{error}</div>}
+      <table className="db" aria-label="Tracked X accounts">
+        <thead><tr><th>Name</th><th className="col-following num">Followers</th><th className="col-type">Type</th><th className="col-scan hide-sm">Last scan</th><th className="col-action"><span className="visually-hidden">Actions</span></th></tr></thead>
+        <tbody>{accounts.map((account) => {
+          const color = categories.find((option) => option.value === account.category)?.color ?? "gray";
+          return <tr key={account.id}>
+            <td><span className="person"><span className="avatar" aria-hidden>{initials(account.name)}</span><span><b>{account.name}</b> <span className="handle">@{account.username}</span></span></span></td>
+            <td className="num quiet">{account.followers_count == null ? "—" : Number(account.followers_count).toLocaleString("en-US")}</td>
+            <td><select className={`tag tag-${color}`} value={account.category} disabled={busyId === account.id} aria-label={`Type for @${account.username}`} onChange={(event) => void updateCategory(account, event.target.value as AccountCategory)}>{categories.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></td>
+            <td className="hide-sm quiet">{account.last_checked_at ? new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" }).format(new Date(account.last_checked_at)) : "—"}</td>
+            <td className="num"><button className="icon-button row-action" onClick={() => void removeAccount(account)} disabled={busyId === account.id} aria-label={`Stop tracking @${account.username}`} title="Stop tracking"><Trash/></button></td>
+          </tr>;
+        })}</tbody>
+      </table>
+      {loading ? <div className="empty">Loading…</div> : <button className="new-row" onClick={() => setSheetOpen(true)} disabled={full}><Plus/>{full ? `Limit of ${limit} reached` : "New"}</button>}
     </div>
     {sheetOpen && <AccountSheet onClose={() => setSheetOpen(false)} onAdded={accountAdded}/>}
   </main>;

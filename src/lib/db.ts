@@ -10,10 +10,12 @@ export async function ensureSchema() {
   const sql = getSql();
   await sql`CREATE TABLE IF NOT EXISTS tracked_accounts (
     id text PRIMARY KEY, username text NOT NULL, name text NOT NULL, profile_image_url text,
-    category text NOT NULL DEFAULT 'person', last_following_ids jsonb NOT NULL DEFAULT '[]'::jsonb, last_checked_at timestamptz,
+    category text NOT NULL DEFAULT 'person', followers_count bigint, following_count bigint, last_following_ids jsonb NOT NULL DEFAULT '[]'::jsonb, last_checked_at timestamptz,
     created_at timestamptz NOT NULL DEFAULT now()
   )`;
   await sql`ALTER TABLE tracked_accounts ADD COLUMN IF NOT EXISTS category text NOT NULL DEFAULT 'person'`;
+  await sql`ALTER TABLE tracked_accounts ADD COLUMN IF NOT EXISTS followers_count bigint`;
+  await sql`ALTER TABLE tracked_accounts ADD COLUMN IF NOT EXISTS following_count bigint`;
   await sql`CREATE TABLE IF NOT EXISTS discovered_accounts (
     id text PRIMARY KEY, username text NOT NULL, name text NOT NULL, description text,
     profile_image_url text, source_account_id text REFERENCES tracked_accounts(id) ON DELETE SET NULL,
