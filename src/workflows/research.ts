@@ -33,14 +33,13 @@ async function findNewFollows(account: { id: string; username: string }) {
   await ensureSchema();
   const sql = getSql();
   const [stored] = await sql`SELECT last_following_ids FROM tracked_accounts WHERE id = ${account.id}`;
-  if (!stored) return { current: [] as Account[] };
+  if (!stored) return { current: [] as Account[], followingIds: [] as string[] };
   const previousIds = (stored.last_following_ids ?? []) as string[];
   const previous = new Set(previousIds);
   const following = await getFollowing(account.id);
   const current = following.map((user) => ({ id: user.id, username: user.username, name: user.name, description: user.description ?? "", profile_image_url: user.profile_image_url ?? "", sourceId: account.id, sourceUsername: account.username }));
   const newAccounts = current.filter((user) => !previous.has(user.id));
-  await sql`UPDATE tracked_accounts SET last_following_ids = ${JSON.stringify(current.map((user) => user.id))}::jsonb, last_checked_at = now() WHERE id = ${account.id}`;
-  return { current: newAccounts };
+  return { current: newAccounts, followingIds: current.map((user) => user.id) };
 }
 
 async function saveDiscoveredAccount(account: Account) {
@@ -53,6 +52,12 @@ async function saveDiscoveredAccount(account: Account) {
     VALUES (${account.id}, ${account.username}, ${account.name}, ${account.description}, ${account.profile_image_url}, ${account.sourceId}, ${account.sourceUsername}, 'pending')
     ON CONFLICT (id) DO UPDATE SET username = EXCLUDED.username, name = EXCLUDED.name, description = EXCLUDED.description,
       profile_image_url = EXCLUDED.profile_image_url, research_status = CASE WHEN discovered_accounts.researched_at IS NULL THEN 'pending' ELSE discovered_accounts.research_status END`;
+}
+
+async function saveFollowingSnapshot(accountId: string, followingIds: string[]) {
+  "use step";
+  const sql = getSql();
+  await sql`UPDATE tracked_accounts SET last_following_ids = ${JSON.stringify(followingIds)}::jsonb, last_checked_at = now() WHERE id = ${accountId}`;
 }
 
 async function researchAccount(account: Account) {
@@ -87,11 +92,14 @@ async function markResearchFailed(account: Account, errorMessage: string) {
 
 export async function trackAccountWorkflow(account: { id: string; username: string }) {
   "use workflow";
-  const { current: newAccounts } = await findNewFollows(account);
+  const { current: newAccounts, followingIds } = await findNewFollows(account);
+  // Persist every row in the delta before advancing the baseline. If a save
+  // fails, the next scan will see the same delta and safely retry the upserts.
+  for (const candidate of newAccounts) await saveDiscoveredAccount(candidate);
+  await saveFollowingSnapshot(account.id, followingIds);
   const leads = [];
   let researchFailed = 0;
   for (const candidate of newAccounts) {
-    await saveDiscoveredAccount(candidate);
     try {
       const researched = await researchAccount(candidate);
       await saveResearch(candidate, researched);
