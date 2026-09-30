@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { start } from "workflow/api";
 import { ensureSchema, getSql } from "@/lib/db";
-import { estimateFollowingReadCost, estimateUserLookupCost, getFollowing, getFollowingScanLimit, lookupXUser } from "@/lib/x-api";
+import { estimateFollowingReadCost, estimateUserLookupCost, getFollowingScanLimit, lookupXUser } from "@/lib/x-api";
 import { trackAccountWorkflow } from "@/workflows/research";
 
 export const runtime = "nodejs";
@@ -26,8 +26,6 @@ export async function POST(request: Request) {
     if (!["investor", "influencer", "executive", "person"].includes(category)) return NextResponse.json({ error: "Choose a valid account type" }, { status: 400 });
     await ensureSchema();
     const sql = getSql();
-    const [count] = await sql`SELECT count(*)::int AS count FROM tracked_accounts`;
-    if (Number(count.count) >= 30) return NextResponse.json({ error: "The prototype supports up to 30 accounts" }, { status: 409 });
     if (getFollowingScanLimit() < 1) return NextResponse.json({ error: "Adding accounts is paused. Set TWITTERAPI_IO_MAX_RESULTS_PER_ACCOUNT to a positive result limit." }, { status: 503 });
     const user = await lookupXUser(username);
     const followersCount = user.public_metrics?.followers_count ?? null;
@@ -37,12 +35,11 @@ export async function POST(request: Request) {
     if (body.confirmCost !== true) {
       return NextResponse.json({ needsConfirmation: true, account: { username: user.username, name: user.name }, estimatedMaxCostUsd });
     }
-    const baseline = await getFollowing(user.username);
-    await sql`INSERT INTO tracked_accounts (id, username, name, profile_image_url, category, followers_count, following_count, last_following_ids, last_checked_at)
-      VALUES (${user.id}, ${user.username}, ${user.name}, ${user.profile_image_url ?? null}, ${category}, ${followersCount}, ${followingCount}, ${JSON.stringify([])}::jsonb, now())
+    await sql`INSERT INTO tracked_accounts (id, username, name, profile_image_url, category, followers_count, following_count, last_following_ids)
+      VALUES (${user.id}, ${user.username}, ${user.name}, ${user.profile_image_url ?? null}, ${category}, ${followersCount}, ${followingCount}, ${JSON.stringify([])}::jsonb)
       ON CONFLICT (id) DO UPDATE SET username = EXCLUDED.username, name = EXCLUDED.name, profile_image_url = EXCLUDED.profile_image_url, category = EXCLUDED.category, followers_count = EXCLUDED.followers_count, following_count = EXCLUDED.following_count`;
-    const initialRun = await start(trackAccountWorkflow, [{ id: user.id, username: user.username, initialFollowing: baseline }]);
-    return NextResponse.json({ account: { ...user, followers_count: followersCount, following_count: followingCount, category }, baselineFollowing: baseline.length, initialResearchRunId: initialRun.runId, estimatedMaxCostUsd }, { status: 201 });
+    const initialRun = await start(trackAccountWorkflow, [{ id: user.id, username: user.username }]);
+    return NextResponse.json({ account: { ...user, followers_count: followersCount, following_count: followingCount, category }, syncQueued: true, initialResearchRunId: initialRun.runId, estimatedMaxCostUsd }, { status: 201 });
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "Could not add X account" }, { status: 503 });
   }

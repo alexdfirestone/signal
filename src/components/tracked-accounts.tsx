@@ -3,8 +3,6 @@
 import { useEffect, useState } from "react";
 import AccountSheet, { categories, type AccountCategory, type TrackedAccount } from "@/components/account-sheet";
 
-const limit = 30;
-
 function initials(name: string) { return name.split(/\s+/).map((part) => part[0]).join("").slice(0, 2).toUpperCase(); }
 function Plus() { return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M12 5v14M5 12h14"/></svg>; }
 function Trash() { return <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/></svg>; }
@@ -59,13 +57,11 @@ export default function TrackedAccounts() {
 
   function accountAdded(account: TrackedAccount) { setAccounts((current) => [account, ...current]); setSheetOpen(false); }
 
-  const full = accounts.length >= limit;
-
   return <main>
     <header className="topbar"><nav className="crumbs"><a className="ghost" href="/">Signal</a><span>/</span><a className="ghost" href="/accounts">Accounts</a></nav></header>
     <div className="content">
       <h1>Tracked accounts</h1>
-      <p className="lede">Signal checks who these accounts follow every day · {accounts.length} of {limit}</p>
+      <p className="lede">Signal checks who these accounts follow every day · {accounts.length} tracked</p>
       {error && <div className="callout" role="alert">{error}</div>}
       <table className="db" aria-label="Tracked X accounts">
         <thead><tr><th>Name</th><th className="col-following num">Followers</th><th className="col-type">Type</th><th className="col-scan hide-sm">Last scan</th><th className="col-action"><span className="visually-hidden">Actions</span></th></tr></thead>
@@ -80,7 +76,7 @@ export default function TrackedAccounts() {
           </tr>;
         })}</tbody>
       </table>
-      {loading ? <div className="empty">Loading…</div> : <button className="new-row" onClick={() => setSheetOpen(true)} disabled={full}><Plus/>{full ? `Limit of ${limit} reached` : "New"}</button>}
+      {loading ? <div className="empty">Loading…</div> : <button className="new-row" onClick={() => setSheetOpen(true)}><Plus/>New</button>}
     </div>
     {sheetOpen && <AccountSheet onClose={() => setSheetOpen(false)} onAdded={accountAdded}/>}
   </main>;

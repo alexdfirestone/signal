@@ -53,7 +53,7 @@ export default function AccountSheet({ onClose, onAdded }: { onClose: () => void
   return <div className="overlay" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
     <form className="dialog" role="dialog" aria-modal="true" aria-labelledby="dialog-title" onSubmit={submit}>
       <h2 id="dialog-title">Track an X account</h2>
-      <p>Signal analyzes the 30 most recent followings, then checks for new ones each day.</p>
+      <p>After you add an account, Signal syncs its 30 most recent followings in the background, then checks for new ones each day.</p>
       <label className="field"><span aria-hidden>@</span><input autoFocus value={username} onChange={(event) => setUsername(event.target.value)} placeholder="username" aria-label="X username" required maxLength={16} autoComplete="off" spellCheck={false}/></label>
       <fieldset className="choices"><legend>Type</legend>{categories.map((option) => <label key={option.value} className={`tag tag-${option.color} choice`}>
         <input type="radio" name="account-category" value={option.value} checked={category === option.value} onChange={() => setCategory(option.value)}/>{option.label}

@@ -34,10 +34,58 @@ const accounts = [
   { username: "hunterwalk", name: "Hunter Walk (Homebrew)" },
   { username: "roelofbotha", name: "Roelof Botha (Sequoia adviser)" },
   { username: "chamath", name: "Chamath Palihapitiya (Social Capital)" },
+
+  // Additional investors from the latest results
+  { username: "varadh", name: "@varadh (angel investor)" },
+  { username: "cyantist", name: "@cyantist (Long Journey)" },
+  { username: "vsodera", name: "@vsodera (Supercharge)" },
+  { username: "DStrachman", name: "@DStrachman (1517)" },
+  { username: "alanaagoyal", name: "@alanaagoyal (Basecase)" },
+  { username: "edsim", name: "@edsim (Boldstart)" },
+  { username: "etdurbin", name: "@etdurbin (Boldstart)" },
+  { username: "darian314", name: "@darian314 (Gradient)" },
+  { username: "brackin", name: "@brackin (Gradient)" },
+  { username: "thezbg", name: "@thezbg (Gradient)" },
+  { username: "jsngr", name: "@jsngr (lil fund)" },
+  { username: "MaxClaussen", name: "@MaxClaussen (SystemOne VC)" },
+  { username: "jackmcclelland", name: "@jackmcclelland (Aforevc)" },
+  { username: "yoheinakajima", name: "@yoheinakajima (Untapped VC)" },
+  { username: "BigMekaStyle", name: "@BigMekaStyle (First Round)" },
+  { username: "AmberIllig", name: "@AmberIllig (The Council Cap)" },
+  { username: "mashadrokova", name: "@mashadrokova (DayOne VC)" },
+  { username: "lessin", name: "@lessin (Slow)" },
+  { username: "yrechtman", name: "@yrechtman (Slow)" },
+  { username: "taylor_w_c", name: "@taylor_w_c (Abstraction Capital)" },
+  { username: "jefielding", name: "@jefielding (Everywhere VC)" },
+  { username: "calfonsorico", name: "@calfonsorico (Cocoa VC)" },
+  { username: "erica_wenger", name: "@erica_wenger (Park Rangers Cap)" },
+  { username: "andreasklinger", name: "@andreasklinger (Prototype Cap)" },
+  { username: "AstasiaMyers", name: "@AstasiaMyers (Felicis)" },
+  { username: "bryce", name: "@bryce (Indie VC)" },
+  { username: "Markgher", name: "@Markgher (MXV Capital)" },
+  { username: "vedikaja_in", name: "@vedikaja_in (Weekend Fund)" },
+  { username: "sarahcat21", name: "@sarahcat21 (Amplify)" },
+  { username: "KatieS", name: "@KatieS (Moxxie Ventures)" },
+  { username: "kartiktalwar", name: "@kartiktalwar (a_capital)" },
+  { username: "stevenl", name: "@stevenl (SevenStars VC)" },
+  { username: "reedmcbride", name: "@reedmcbride (angel investor)" },
+  { username: "S27G_", name: "@S27G_ (angel investor)" },
+  { username: "yanabana", name: "@yanabana (angel investor)" },
+  { username: "evancharles", name: "@evancharles (angel investor)" },
+  { username: "NealMintz1", name: "@NealMintz1 (Wischoff VC)" },
+  { username: "vaibhavbetter", name: "@vaibhavbetter (Better Capital)" },
+  { username: "mmccauley", name: "@mmccauley (Garage Capital)" },
+  { username: "pgillian____", name: "@pgillian____ (Village Global)" },
+  { username: "soleio", name: "@soleio (angel investor)" },
+  { username: "ColinGardiner", name: "@ColinGardiner (Yonder Ventures)" },
+  { username: "SVenkatachalam", name: "@SVenkatachalam (Axiom)" },
+  { username: "tgm", name: "@tgm (angel investor)" },
+  { username: "JamesTamplin", name: "@JamesTamplin (HF0)" },
+  { username: "ashleymayer", name: "@ashleymayer (Coalition VC)" },
+  { username: "sonyatweetybird", name: "@sonyatweetybird (Sequoia)" },
+  { username: "JamesBorow", name: "@JamesBorow (angel investor)" },
 ];
 
-const maxTrackedAccounts = 30;
-const seedBaselineLimit = 30;
 const profileLookupCost = 0.18 / 1000;
 const creditsPerUsd = 100_000;
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -72,45 +120,6 @@ async function lookupUser(username) {
   };
 }
 
-async function getFollowing(username, expectedFollowingCount) {
-  const following = [];
-  let cursor = "";
-  let pageNumber = 0;
-  while (following.length < expectedFollowingCount) {
-    const pageSize = Math.min(200, Math.max(20, expectedFollowingCount - following.length));
-    const query = new URLSearchParams({ userName: username, pageSize: String(pageSize), cursor });
-    const result = await requestProvider(`/twitter/user/followings?${query}`);
-    if (result.status === "error") throw new Error(result.message || `Could not fetch followings for @${username}`);
-    const page = result.followings ?? [];
-    pageNumber += 1;
-    following.push(...page.map((user) => ({
-      id: user.id,
-      username: user.userName,
-      name: user.name,
-      description: user.description,
-      profile_image_url: user.profilePicture,
-    })));
-    log(`  @${username}: page ${pageNumber}, ${following.length}/${expectedFollowingCount} follows loaded.`);
-    if (!result.has_next_page || !result.next_cursor || page.length === 0) break;
-    cursor = result.next_cursor;
-  }
-  return following;
-}
-
-function estimateFollowingCost(counts) {
-  const totalCredits = counts.reduce((sum, count) => {
-    let remaining = count;
-    let credits = 0;
-    while (remaining > 0) {
-      const pageSize = Math.min(200, Math.max(20, remaining));
-      credits += pageSize * (pageSize >= 200 ? 1 : pageSize >= 100 ? 2 : 3);
-      remaining -= Math.min(pageSize, remaining);
-    }
-    return sum + credits;
-  }, 0);
-  return totalCredits / creditsPerUsd;
-}
-
 async function main() {
   const execute = process.argv.includes("--execute");
   const estimateOnly = process.argv.includes("--estimate");
@@ -125,31 +134,31 @@ async function main() {
   const sql = neon(process.env.DATABASE_URL);
   await sql`CREATE TABLE IF NOT EXISTS tracked_accounts (
     id text PRIMARY KEY, username text NOT NULL, name text NOT NULL, profile_image_url text,
-    category text NOT NULL DEFAULT 'person', followers_count bigint,
+    category text NOT NULL DEFAULT 'person', followers_count bigint, following_count bigint,
     last_following_ids jsonb NOT NULL DEFAULT '[]'::jsonb, last_checked_at timestamptz,
     created_at timestamptz NOT NULL DEFAULT now()
   )`;
   await sql`ALTER TABLE tracked_accounts ADD COLUMN IF NOT EXISTS category text NOT NULL DEFAULT 'person'`;
   await sql`ALTER TABLE tracked_accounts ADD COLUMN IF NOT EXISTS followers_count bigint`;
+  await sql`ALTER TABLE tracked_accounts ADD COLUMN IF NOT EXISTS following_count bigint`;
 
-  const existing = await sql`SELECT id, username, jsonb_array_length(last_following_ids) AS baseline_count FROM tracked_accounts ORDER BY created_at`;
+  const existing = await sql`SELECT id, username FROM tracked_accounts ORDER BY created_at`;
   const existingByUsername = new Map(existing.map((account) => [account.username.toLowerCase(), account]));
   const known = new Set(existingByUsername.keys());
   const pending = accounts.filter((account) => !known.has(account.username.toLowerCase()));
-  const slots = Math.max(0, maxTrackedAccounts - existing.length);
-  const batch = (refreshExisting ? accounts : pending).slice(0, refreshExisting ? maxTrackedAccounts : slots);
+  const batch = refreshExisting ? accounts : pending;
 
-  log(`Tracked already: ${existing.length}; new seed candidates: ${pending.length}; available slots: ${slots}${refreshExisting ? "; refreshing existing baselines" : ""}.`);
+  log(`Tracked already: ${existing.length}; new seed candidates: ${pending.length}${refreshExisting ? "; refreshing existing baselines" : ""}.`);
   if (!execute && !estimateOnly) {
     log("No API calls made. Seed is now dry-run by default.");
     for (const account of batch) log(`Would seed @${account.username} — ${account.name}`);
-    log("Before execution, the script reads each profile from twitterapi.io and estimates following-list credits from its published page pricing. It stops before fetching following lists if the estimate exceeds the supplied budget.");
+    log("Before execution, the script reads each profile from twitterapi.io and checks the profile lookup cost against the supplied budget. Newly added accounts keep an empty follow snapshot so their first app scan discovers recent follows.");
     return;
   }
   if (!process.env.TWITTERAPI_IO_API_KEY) throw new Error("TWITTERAPI_IO_API_KEY is not available in this process");
 
-  // Profile lookups cost at most one user resource apiece. Fetch them first so
-  // the complete graph estimate is checked before making any following calls.
+  // Resolve profiles before writes so the full profile lookup cost is known
+  // before any accounts are added to the database.
   const profiles = [];
   const skippedProfiles = [];
   for (const account of batch) {
@@ -165,9 +174,6 @@ async function main() {
         account,
         user,
         followingCount,
-        baselineLimit: Math.min(seedBaselineLimit, followingCount),
-        baselineCount: Number(stored?.baseline_count ?? 0),
-        baselineComplete: Number(stored?.baseline_count ?? 0) >= Math.min(seedBaselineLimit, followingCount),
         alreadyTracked: Boolean(stored),
       });
     } catch (error) {
@@ -180,12 +186,11 @@ async function main() {
     }
   }
   for (const skipped of skippedProfiles) log(`Skipping @${skipped.username}: ${skipped.reason}`);
-  const profilesToFetch = profiles.filter((profile) => !profile.alreadyTracked || !profile.baselineComplete);
-  const expectedCostUsd = profiles.length * profileLookupCost + estimateFollowingCost(profilesToFetch.map((profile) => profile.baselineLimit));
+  const expectedCostUsd = profiles.length * profileLookupCost;
   const budgetText = estimateOnly && !execute ? "no execution budget (estimate only)" : `$${maxCostUsd.toFixed(2)}`;
-  log(`Cost preflight: about $${expectedCostUsd.toFixed(4)} gross across ${profilesToFetch.length} baselines to fetch (up to ${seedBaselineLimit} most recent follows per account), budget ${budgetText}.`);
+  log(`Cost preflight: about $${expectedCostUsd.toFixed(4)} gross for profile lookups, budget ${budgetText}. The initial follow scans are queued separately through the app.`);
   if (estimateOnly && !execute) {
-    log(`Estimate-only complete. No following lists fetched. Profile lookups may have cost about $${(profiles.length * profileLookupCost).toFixed(4)}.`);
+    log(`Estimate-only complete. Profile lookups may have cost about $${expectedCostUsd.toFixed(4)}.`);
     return;
   }
   if (expectedCostUsd > maxCostUsd) {
@@ -195,23 +200,23 @@ async function main() {
   let added = 0;
   let attempted = 0;
   const failures = [];
-  for (const { account, user, followingCount, baselineLimit, baselineCount, baselineComplete, alreadyTracked } of profiles) {
-    if (alreadyTracked && baselineComplete) {
-      log(`Already initialized @${user.username}: ${baselineCount} follows in the baseline.`);
+  for (const { account, user, followingCount, alreadyTracked } of profiles) {
+    if (alreadyTracked) {
+      log(`Already tracked @${user.username}; leaving its current follow snapshot unchanged.`);
       continue;
     }
     attempted += 1;
     try {
-      const following = await getFollowing(user.username, baselineLimit);
       const followersCount = user.public_metrics?.followers_count ?? null;
       await sql`INSERT INTO tracked_accounts
         (id, username, name, profile_image_url, category, followers_count, following_count, last_following_ids, last_checked_at)
-        VALUES (${user.id}, ${user.username}, ${user.name}, ${user.profile_image_url ?? null}, 'investor', ${followersCount}, ${followingCount}, ${JSON.stringify(following.map((person) => person.id))}::jsonb, now())
+        VALUES (${user.id}, ${user.username}, ${user.name}, ${user.profile_image_url ?? null}, 'investor', ${followersCount}, ${followingCount}, '[]'::jsonb, NULL)
         ON CONFLICT (id) DO UPDATE SET username = EXCLUDED.username, name = EXCLUDED.name,
           profile_image_url = EXCLUDED.profile_image_url, category = EXCLUDED.category,
-          followers_count = EXCLUDED.followers_count, following_count = EXCLUDED.following_count`;
+          followers_count = EXCLUDED.followers_count, following_count = EXCLUDED.following_count,
+          last_following_ids = '[]'::jsonb, last_checked_at = NULL`;
       added += 1;
-      log(`Saved @${user.username} (${user.name}); baseline: ${following.length} most recent follows (profile following count: ${followingCount}).`);
+      log(`Saved @${user.username} (${user.name}); ready for initial scan of recent follows (profile following count: ${followingCount}).`);
     } catch (error) {
       const reason = error instanceof Error ? error.message : String(error);
       failures.push({ username: account.username, reason });
@@ -225,7 +230,7 @@ async function main() {
   }
 
   const notAttempted = Math.max(0, profiles.length - attempted);
-  log(`Seed finished: ${added} added, ${failures.length} failed, ${notAttempted} not attempted, ${pending.length - batch.length} skipped (capacity).`);
+  log(`Seed finished: ${added} added, ${failures.length} failed, ${notAttempted} not attempted.`);
   if (failures.length) process.exitCode = 1;
 }
 
