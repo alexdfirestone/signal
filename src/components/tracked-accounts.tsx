@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import AccountSheet, { categories, type AccountCategory, type TrackedAccount } from "@/components/account-sheet";
+import TableSkeleton from "@/components/table-skeleton";
 
 function initials(name: string) { return name.split(/\s+/).map((part) => part[0]).join("").slice(0, 2).toUpperCase(); }
 function Plus() { return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M12 5v14M5 12h14"/></svg>; }
@@ -61,22 +62,23 @@ export default function TrackedAccounts() {
     <header className="topbar"><nav className="crumbs"><a className="ghost" href="/">Signal</a><span>/</span><a className="ghost" href="/accounts">Accounts</a></nav><a className="ghost muted" href="/runs">Runs</a></header>
     <div className="content">
       <h1>Tracked accounts</h1>
-      <p className="lede">Signal checks who these accounts follow every day · {accounts.length} tracked</p>
+      <p className="lede">{loading ? <span className="skeleton-block skeleton-lede" aria-hidden="true"/> : <>Signal checks who these accounts follow every day · {accounts.length} tracked</>}</p>
       {error && <div className="callout" role="alert">{error}</div>}
-      <table className="db" aria-label="Tracked X accounts">
-        <thead><tr><th>Name</th><th className="col-following num">Followers</th><th className="col-type">Type</th><th className="col-scan hide-sm">Last scan</th><th className="col-action"><span className="visually-hidden">Actions</span></th></tr></thead>
-        <tbody>{accounts.map((account) => {
+      <table className="db" aria-busy={loading}>
+        <caption className="visually-hidden">{loading ? "Loading tracked accounts" : "Tracked accounts"}</caption>
+        <thead><tr><th>Name</th><th className="col-following num">Following</th><th className="col-type">Type</th><th className="col-scan hide-sm">Last scan</th><th className="col-action"><span className="visually-hidden">Actions</span></th></tr></thead>
+        <tbody>{loading ? <TableSkeleton columns={5}/> : accounts.map((account) => {
           const color = categories.find((option) => option.value === account.category)?.color ?? "gray";
           return <tr key={account.id}>
             <td><span className="person"><span className="avatar" aria-hidden>{initials(account.name)}</span><span><a className="row-title" href={`/accounts/${encodeURIComponent(account.id)}`}>{account.name}</a> <span className="handle">@{account.username}</span></span></span></td>
-            <td className="num quiet">{account.followers_count == null ? "—" : Number(account.followers_count).toLocaleString("en-US")}</td>
+            <td className="num quiet">{account.following_count == null ? "—" : Number(account.following_count).toLocaleString("en-US")}</td>
             <td><select className={`tag tag-${color}`} value={account.category} disabled={busyId === account.id} aria-label={`Type for @${account.username}`} onChange={(event) => void updateCategory(account, event.target.value as AccountCategory)}>{categories.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></td>
             <td className="hide-sm quiet">{account.last_checked_at ? new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" }).format(new Date(account.last_checked_at)) : "—"}</td>
             <td className="num"><button className="icon-button row-action" onClick={() => void removeAccount(account)} disabled={busyId === account.id} aria-label={`Stop tracking @${account.username}`} title="Stop tracking"><Trash/></button></td>
           </tr>;
         })}</tbody>
       </table>
-      {loading ? <div className="empty">Loading…</div> : <button className="new-row" onClick={() => setSheetOpen(true)}><Plus/>New</button>}
+      {!loading && <button className="new-row" onClick={() => setSheetOpen(true)}><Plus/>New</button>}
     </div>
     {sheetOpen && <AccountSheet onClose={() => setSheetOpen(false)} onAdded={accountAdded}/>}
   </main>;

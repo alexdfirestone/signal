@@ -19,13 +19,7 @@ export async function GET(request: Request) {
   const secret = process.env.CRON_SECRET;
   if (!secret || request.headers.get("authorization") !== `Bearer ${secret}`) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   try {
-    const budget = Number(process.env.TWITTERAPI_IO_DAILY_BUDGET_USD ?? 0);
-    if (!Number.isFinite(budget) || budget <= 0) {
-      const message = "Automatic scans are paused until TWITTERAPI_IO_DAILY_BUDGET_USD is configured.";
-      await recordCronFailure(message);
-      return NextResponse.json({ error: message }, { status: 503 });
-    }
-    return NextResponse.json(await queueAllAccountScans({ confirmCost: true, maxCostUsd: budget, trigger: "cron" }), { status: 202 });
+    return NextResponse.json(await queueAllAccountScans({ confirmCost: true, trigger: "cron" }), { status: 202 });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Could not queue daily scan";
     await recordCronFailure(message);

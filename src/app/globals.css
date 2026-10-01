@@ -49,11 +49,13 @@ h1 { margin: 0; font-size: 40px; font-weight: 700; line-height: 1.2; letter-spac
 .lede a:hover { text-decoration-color: var(--text); }
 
 /* View bar */
-.viewbar { height: 40px; display: flex; align-items: center; gap: 2px; border-bottom: 1px solid var(--line); }
+.viewbar { height: 40px; display: flex; align-items: center; gap: 2px; margin-top: 24px; border-bottom: 1px solid var(--line); }
 .tab { position: relative; height: 28px; padding: 0 8px; border: 0; border-radius: 4px; background: transparent; color: var(--text-2); }
 .tab:hover { background: var(--hover); }
 .tab[aria-pressed="true"] { color: var(--text); font-weight: 500; }
 .tab[aria-pressed="true"]::after { content: ""; position: absolute; left: 8px; right: 8px; bottom: -7px; height: 2px; background: var(--text); }
+.load-more { display: block; margin: 12px auto 0; padding: 5px 12px; border: 1px solid var(--line); border-radius: 4px; background: transparent; color: var(--text-2); }
+.load-more:hover:not(:disabled) { background: var(--hover); }
 .search { margin-left: auto; display: flex; align-items: center; gap: 4px; }
 .search input { width: 180px; height: 28px; padding: 0 6px; border: 0; border-radius: 4px; outline: 0; background: transparent; }
 .search input::placeholder { color: var(--text-3); }
@@ -69,7 +71,10 @@ h1 { margin: 0; font-size: 40px; font-weight: 700; line-height: 1.2; letter-spac
 .skeleton-row:hover { background: transparent !important; }
 .skeleton-block { display: block; height: 10px; border-radius: 3px; background: var(--hover); opacity: .8; animation: skeleton-pulse 1.8s ease-in-out infinite; }
 .skeleton-name { width: 68%; } .skeleton-about { width: 88%; } .skeleton-category { width: 72px; height: 18px; }
-.skeleton-source { width: 76px; } .skeleton-date { width: 58px; } .skeleton-confidence { width: 30px; margin-left: auto; }
+.skeleton-source { width: 76px; } .skeleton-date { width: 58px; }
+.skeleton-lede { width: min(320px, 80%); height: 12px; margin-top: 6px; }
+.skeleton-heading { width: 140px; height: 16px; }
+.skeleton-header { width: 60%; height: 10px; }
 @keyframes skeleton-pulse { 50% { opacity: .45; } }
 @media (prefers-reduced-motion: reduce) { .skeleton-block { animation: none; } }
 .db .num { text-align: right; font-variant-numeric: tabular-nums; }

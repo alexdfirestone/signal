@@ -4,7 +4,7 @@ import { trackAccountWorkflow } from "@/workflows/research";
 import { estimateFollowingReadCost, getFollowingScanLimit } from "@/lib/x-api";
 import { randomUUID } from "node:crypto";
 
-export async function queueAllAccountScans(options: { confirmCost?: boolean; maxCostUsd?: number; username?: string; usernames?: string[]; trigger?: "cron" | "manual" } = {}) {
+export async function queueAllAccountScans(options: { confirmCost?: boolean; username?: string; usernames?: string[]; trigger?: "cron" | "manual" } = {}) {
   // `vercel env pull` can leave VERCEL_URL defined as an empty string locally.
   // Workflow interprets any defined value as a deployed URL and then builds
   // `https://`, which fails before the first step runs.
@@ -32,9 +32,6 @@ export async function queueAllAccountScans(options: { confirmCost?: boolean; max
     const count = account.following_count == null ? resultLimit : Math.min(Number(account.following_count), resultLimit);
     return total + estimateFollowingReadCost(count, 1);
   }, 0);
-  if (options.maxCostUsd != null && estimatedMaxCostUsd > options.maxCostUsd) {
-    throw new Error(`Scan stopped: estimated twitterapi.io cost is up to $${estimatedMaxCostUsd.toFixed(4)}, above the configured $${options.maxCostUsd.toFixed(2)} budget.`);
-  }
   if (!options.confirmCost) return { queued: 0, maxResultsPerAccount: resultLimit, estimatedMaxCostUsd, needsConfirmation: true, runs: [] };
   const scanRunId = randomUUID();
   await sql`INSERT INTO scan_runs (id, trigger, account_count) VALUES (${scanRunId}, ${options.trigger ?? "manual"}, ${accounts.length})`;
