@@ -131,6 +131,14 @@ select.tag:disabled { opacity: .6; cursor: default; }
 @keyframes rise { from { opacity: 0; transform: translateY(4px) scale(.99); } }
 
 .toast { position: fixed; bottom: 24px; left: 50%; z-index: 40; transform: translateX(-50%); padding: 8px 12px; border-radius: 6px; background: #2f2f2f; color: #fff; box-shadow: var(--shadow); animation: fade .12s ease-out; }
+.table-scroll { overflow-x: auto; }
+.table-scroll .db { min-width: 760px; }
+.metric-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin: 24px 0 38px; }
+.metric { display: flex; flex-direction: column; gap: 2px; padding: 14px; border: 1px solid var(--line); border-radius: 6px; }
+.metric strong { font-size: 25px; font-variant-numeric: tabular-nums; }
+.metric span, .run-id { color: var(--text-2); }
+.content h2 { margin: 30px 0 10px; font-size: 18px; }
+.run-id { margin-top: 28px; overflow-wrap: anywhere; }
 .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; }
 
 @media (max-width: 720px) {
@@ -142,4 +150,5 @@ select.tag:disabled { opacity: .6; cursor: default; }
   .col-following { width: 88px; }
   .col-type { width: 100px; }
   .search input { width: 110px; }
+  .metric-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }

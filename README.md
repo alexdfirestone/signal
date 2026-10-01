@@ -8,14 +8,16 @@ Signal tracks public X accounts and looks for new accounts they follow. New acco
 2. Run `vercel link` and `vercel env pull .env.local` to load Neon and Vercel's short-lived `VERCEL_OIDC_TOKEN` for AI Gateway. Set `X_BEARER_TOKEN` and `CRON_SECRET` in `.env.local`.
 3. Run `npm run dev`.
 4. Add an X handle from the watchlist. The app queues a background sync of its 30 most recent follows and researches those profiles; later daily scans look for new follows.
-5. Click **Run scan now** to queue per-account workflows. On Vercel, `/api/cron/daily-scan` runs every day at 8 AM PT.
+5. Click **Run scan now** to queue per-account workflows. On Vercel, `/api/cron/daily-scan` runs daily at 15:00 UTC (8 AM Pacific during daylight saving time, 7 AM during standard time). A second cron checks at 17:00 UTC that the scan endpoint was invoked and records a missed invocation.
 
-`ensureSchema()` creates the prototype tables on first API use. It adds one `category` column to an existing `tracked_accounts` table if needed. The schema is also documented in `db/schema.sql`.
+`ensureSchema()` creates the prototype tables on first API use. The schema is also documented in `db/schema.sql`.
 
 ## Data and pipeline
 
 - `tracked_accounts` stores one replaceable snapshot of the last seen followed X user IDs per account. A scan compares the current graph to that previous snapshot and replaces it in place, so snapshot storage stays bounded instead of growing every day.
 - `discovered_accounts` stores every newly seen account, including people and organizations that do not qualify as companies. A profile is written with `research_status = 'pending'` before the AI step, then enriched with the classification, rationale, and web sources. Failed research stays in the table for later retry/refinement. The dashboard filters to `is_company = true` and shows those leads in today, this week, and this month views.
+- `scan_runs` stores each manual or scheduled batch. `account_scan_runs` records one account's queue, fetch, snapshot, and research progress with counts and errors. `account_scan_follows` links the newly followed profiles to the scan that found them, even when several watched accounts follow the same profile. `/runs` shows batch history, `/runs/[id]` shows a batch, and `/accounts/[id]` shows Pacific-time daily totals and account history. Each account run has its own detail page.
+- Queue and workflow failures are written to the run records and logged with run IDs. Scheduled invocations that fail budget preflight or are missed are also recorded. The pages flag a queued or running workflow as stalled after two hours. This is visibility into a possible failure, not an automatic retry or notification.
 - Tracked X accounts can be categorized as Investor, Influencer, Executive, or Person. Person covers a personal account such as your own.
 - The workflow steps fetch current follows, compare the snapshot, save every delta, and run a bounded AI SDK `ToolLoopAgent` through Vercel AI Gateway with OpenAI web search and structured output. Vercel Workflow provides durable step execution and retries.
 - X access is read-only. Use an X API bearer token with access to the `users/by/username` and `users/:id/following` endpoints. The app has no fixed tracked-account limit; provider API plan limits and follow-list pagination still apply. Adding an account queues its initial follow-list sync in the background.

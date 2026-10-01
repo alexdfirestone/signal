@@ -58,7 +58,7 @@ export default function TrackedAccounts() {
   function accountAdded(account: TrackedAccount) { setAccounts((current) => [account, ...current]); setSheetOpen(false); }
 
   return <main>
-    <header className="topbar"><nav className="crumbs"><a className="ghost" href="/">Signal</a><span>/</span><a className="ghost" href="/accounts">Accounts</a></nav></header>
+    <header className="topbar"><nav className="crumbs"><a className="ghost" href="/">Signal</a><span>/</span><a className="ghost" href="/accounts">Accounts</a></nav><a className="ghost muted" href="/runs">Runs</a></header>
     <div className="content">
       <h1>Tracked accounts</h1>
       <p className="lede">Signal checks who these accounts follow every day · {accounts.length} tracked</p>
@@ -68,7 +68,7 @@ export default function TrackedAccounts() {
         <tbody>{accounts.map((account) => {
           const color = categories.find((option) => option.value === account.category)?.color ?? "gray";
           return <tr key={account.id}>
-            <td><span className="person"><span className="avatar" aria-hidden>{initials(account.name)}</span><span><b>{account.name}</b> <span className="handle">@{account.username}</span></span></span></td>
+            <td><span className="person"><span className="avatar" aria-hidden>{initials(account.name)}</span><span><a className="row-title" href={`/accounts/${encodeURIComponent(account.id)}`}>{account.name}</a> <span className="handle">@{account.username}</span></span></span></td>
             <td className="num quiet">{account.followers_count == null ? "—" : Number(account.followers_count).toLocaleString("en-US")}</td>
             <td><select className={`tag tag-${color}`} value={account.category} disabled={busyId === account.id} aria-label={`Type for @${account.username}`} onChange={(event) => void updateCategory(account, event.target.value as AccountCategory)}>{categories.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></td>
             <td className="hide-sm quiet">{account.last_checked_at ? new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" }).format(new Date(account.last_checked_at)) : "—"}</td>

@@ -70,15 +70,9 @@ export default function Dashboard() {
   async function runScan() {
     setRunning(true);
     try {
-      let response = await fetch("/api/scan", { method: "POST" });
-      let result = await response.json();
-      if (response.ok && result.needsConfirmation) {
-        const cost = Number(result.estimatedMaxCostUsd).toFixed(4);
-        if (!window.confirm(`This scan may cost up to $${cost} in twitterapi.io credits. Continue?`)) return;
-        response = await fetch("/api/scan", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ confirmCost: true }) });
-        result = await response.json();
-      }
-      notify(response.ok ? `Scanning ${result.queued} accounts · up to $${Number(result.estimatedMaxCostUsd).toFixed(4)} in twitterapi.io credits` : result.error || "Could not start scan");
+      const response = await fetch("/api/scan", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ confirmCost: true }) });
+      const result = await response.json();
+      notify(response.ok ? `Scan queued for ${result.queued} accounts` : result.error || "Could not start scan");
     } catch { notify("Could not start scan"); }
     finally { setRunning(false); }
   }
@@ -86,7 +80,7 @@ export default function Dashboard() {
   return <main>
     <header className="topbar">
       <nav className="crumbs"><a className="ghost" href="/">Signal</a></nav>
-      <div className="topbar-actions"><a className="ghost muted" href="/accounts">Accounts</a><button className="ghost muted" onClick={runScan} disabled={running}>{running ? "Scanning…" : "Scan now"}</button></div>
+      <div className="topbar-actions"><a className="ghost muted" href="/accounts">Accounts</a><a className="ghost muted" href="/runs">Runs</a><button className="ghost muted" onClick={runScan} disabled={running}>{running ? "Scanning…" : "Scan now"}</button></div>
     </header>
     <div className="content">
       <h1>New startups</h1>

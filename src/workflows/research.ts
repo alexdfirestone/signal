@@ -2,7 +2,7 @@ import { Output, ToolLoopAgent, isStepCount } from "ai";
 import { openai } from "@ai-sdk/openai";
 import { z } from "zod";
 import { getFollowing, type XUser } from "@/lib/x-api";
-import { ensureSchema, getSql } from "@/lib/db";
+import { ensureSchema, getSql, refreshScanRun } from "@/lib/db";
 
 const researchSchema = z.object({
   isCompany: z.boolean().describe("Whether this is a real company or startup worth watching."),
@@ -33,7 +33,7 @@ async function findNewFollows(account: { id: string; username: string }, initial
   await ensureSchema();
   const sql = getSql();
   const [stored] = await sql`SELECT last_following_ids FROM tracked_accounts WHERE id = ${account.id}`;
-  if (!stored) return { current: [] as Account[], followingIds: [] as string[] };
+  if (!stored) throw new Error(`Tracked account @${account.username} no longer exists`);
   const previousIds = (stored.last_following_ids ?? []) as string[];
   const previous = new Set(previousIds);
   const following = initialFollowing ?? await getFollowing(account.username);
@@ -42,7 +42,7 @@ async function findNewFollows(account: { id: string; username: string }, initial
   return { current: newAccounts, followingIds: current.map((user) => user.id) };
 }
 
-async function saveDiscoveredAccount(account: Account) {
+async function saveDiscoveredAccount(account: Account, accountRunId?: string) {
   "use step";
   await ensureSchema();
   const sql = getSql();
@@ -56,6 +56,8 @@ async function saveDiscoveredAccount(account: Account) {
           THEN discovered_accounts.research_status
         ELSE 'pending'
       END`;
+  if (accountRunId) await sql`INSERT INTO account_scan_follows (account_scan_run_id, discovered_account_id)
+    VALUES (${accountRunId}, ${account.id}) ON CONFLICT DO NOTHING`;
   // Claim once so overlapping investor scans reuse a completed result rather
   // than launching duplicate web searches and model calls for the same profile.
   const [claimed] = await sql`UPDATE discovered_accounts SET research_status = 'researching'
@@ -88,6 +90,7 @@ async function saveResearch(account: Account, research: Research) {
     industry = ${research.industry}, website = ${research.website}, location = ${research.location},
     funding_stage = ${research.fundingStage}, confidence = ${research.confidence}, research = ${JSON.stringify(research)}::jsonb
     WHERE id = ${account.id}`;
+  await refreshScanCounts(account.id);
   return research;
 }
 
@@ -96,18 +99,67 @@ async function markResearchFailed(account: Account, errorMessage: string) {
   await ensureSchema();
   const sql = getSql();
   await sql`UPDATE discovered_accounts SET research_status = 'failed', research_error = ${errorMessage.slice(0, 1000)} WHERE id = ${account.id} AND researched_at IS NULL`;
+  await refreshScanCounts(account.id);
 }
 
-export async function trackAccountWorkflow(account: { id: string; username: string; initialFollowing?: XUser[] }) {
+async function refreshScanCounts(discoveredAccountId: string) {
+  const sql = getSql();
+  await sql`UPDATE account_scan_runs r SET
+    researched = (SELECT count(*)::integer FROM account_scan_follows f JOIN discovered_accounts d ON d.id = f.discovered_account_id WHERE f.account_scan_run_id = r.id AND d.research_status = 'complete'),
+    startups = (SELECT count(*)::integer FROM account_scan_follows f JOIN discovered_accounts d ON d.id = f.discovered_account_id WHERE f.account_scan_run_id = r.id AND d.research_status = 'complete' AND d.is_company = true),
+    research_failed = (SELECT count(*)::integer FROM account_scan_follows f JOIN discovered_accounts d ON d.id = f.discovered_account_id WHERE f.account_scan_run_id = r.id AND d.research_status = 'failed')
+    WHERE r.id IN (SELECT account_scan_run_id FROM account_scan_follows WHERE discovered_account_id = ${discoveredAccountId})`;
+}
+
+async function setScanStage(accountRunId: string, stage: string) {
+  "use step";
+  const sql = getSql();
+  await sql`UPDATE account_scan_runs SET status = 'running', stage = ${stage} WHERE id = ${accountRunId}`;
+}
+
+async function recordFollowDelta(accountRunId: string, count: number) {
+  "use step";
+  const sql = getSql();
+  await sql`UPDATE account_scan_runs SET new_follows = ${count}, stage = 'snapshot' WHERE id = ${accountRunId}`;
+}
+
+async function finishAccountScan(accountRunId: string, error?: { stage: string; message: string }) {
+  "use step";
+  const sql = getSql();
+  const [counts] = await sql`SELECT
+    count(*) FILTER (WHERE d.research_status = 'complete')::integer AS researched,
+    count(*) FILTER (WHERE d.research_status = 'complete' AND d.is_company = true)::integer AS startups,
+    count(*) FILTER (WHERE d.research_status = 'failed')::integer AS research_failed
+    FROM account_scan_follows f JOIN discovered_accounts d ON d.id = f.discovered_account_id
+    WHERE f.account_scan_run_id = ${accountRunId}`;
+  const failed = Number(counts.research_failed);
+  const status = error ? "failed" : failed ? "partial" : "complete";
+  await sql`UPDATE account_scan_runs SET status = ${status}, stage = ${error?.stage ?? "complete"},
+    researched = ${Number(counts.researched)}, startups = ${Number(counts.startups)}, research_failed = ${failed},
+    error = ${error?.message.slice(0, 1000) ?? null}, finished_at = now() WHERE id = ${accountRunId}`;
+  const [run] = await sql`SELECT scan_run_id FROM account_scan_runs WHERE id = ${accountRunId}`;
+  if (run?.scan_run_id) await refreshScanRun(String(run.scan_run_id));
+}
+
+export async function trackAccountWorkflow(account: { id: string; username: string; accountRunId?: string; initialFollowing?: XUser[] }) {
   "use workflow";
+  let stage = "fetch";
+  try {
+  if (account.accountRunId) await setScanStage(account.accountRunId, stage);
   const { current: newAccounts, followingIds } = await findNewFollows(account, account.initialFollowing);
   // Persist every row in the delta before advancing the baseline. If a save
   // fails, the next scan will see the same delta and safely retry the upserts.
   const researchCandidates: Account[] = [];
+  stage = "save_delta";
+  if (account.accountRunId) await setScanStage(account.accountRunId, stage);
   for (const candidate of newAccounts) {
-    if (await saveDiscoveredAccount(candidate)) researchCandidates.push(candidate);
+    if (await saveDiscoveredAccount(candidate, account.accountRunId)) researchCandidates.push(candidate);
   }
+  if (account.accountRunId) await recordFollowDelta(account.accountRunId, newAccounts.length);
+  stage = "snapshot";
   await saveFollowingSnapshot(account.id, followingIds);
+  stage = "research";
+  if (account.accountRunId) await setScanStage(account.accountRunId, stage);
   const leads = [];
   let researchFailed = 0;
   for (const candidate of researchCandidates) {
@@ -117,8 +169,17 @@ export async function trackAccountWorkflow(account: { id: string; username: stri
       if (researched.isCompany) leads.push({ username: candidate.username, ...researched });
     } catch (error) {
       researchFailed += 1;
-      await markResearchFailed(candidate, error instanceof Error ? error.message : "Research failed");
+      const message = error instanceof Error ? error.message : "Research failed";
+      console.error("scan.research_failed", { accountRunId: account.accountRunId, username: candidate.username, error: message });
+      await markResearchFailed(candidate, message);
     }
   }
+  if (account.accountRunId) await finishAccountScan(account.accountRunId);
   return { tracked: account.username, newFollows: newAccounts.length, researched: researchCandidates.length, reused: newAccounts.length - researchCandidates.length, researchFailed, companies: leads };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Scan failed";
+    console.error("scan.account_failed", { accountRunId: account.accountRunId, username: account.username, stage, error: message });
+    if (account.accountRunId) await finishAccountScan(account.accountRunId, { stage, message });
+    throw error;
+  }
 }

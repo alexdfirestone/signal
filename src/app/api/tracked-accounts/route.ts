@@ -3,6 +3,7 @@ import { start } from "workflow/api";
 import { ensureSchema, getSql } from "@/lib/db";
 import { estimateFollowingReadCost, estimateUserLookupCost, getFollowingScanLimit, lookupXUser } from "@/lib/x-api";
 import { trackAccountWorkflow } from "@/workflows/research";
+import { randomUUID } from "node:crypto";
 
 export const runtime = "nodejs";
 
@@ -38,7 +39,17 @@ export async function POST(request: Request) {
     await sql`INSERT INTO tracked_accounts (id, username, name, profile_image_url, category, followers_count, following_count, last_following_ids)
       VALUES (${user.id}, ${user.username}, ${user.name}, ${user.profile_image_url ?? null}, ${category}, ${followersCount}, ${followingCount}, ${JSON.stringify([])}::jsonb)
       ON CONFLICT (id) DO UPDATE SET username = EXCLUDED.username, name = EXCLUDED.name, profile_image_url = EXCLUDED.profile_image_url, category = EXCLUDED.category, followers_count = EXCLUDED.followers_count, following_count = EXCLUDED.following_count`;
-    const initialRun = await start(trackAccountWorkflow, [{ id: user.id, username: user.username }]);
+    const accountRunId = randomUUID();
+    await sql`INSERT INTO account_scan_runs (id, account_id, username) VALUES (${accountRunId}, ${user.id}, ${user.username})`;
+    let initialRun;
+    try {
+      initialRun = await start(trackAccountWorkflow, [{ id: user.id, username: user.username, accountRunId }]);
+      await sql`UPDATE account_scan_runs SET workflow_run_id = ${initialRun.runId} WHERE id = ${accountRunId}`;
+    } catch (cause) {
+      const message = cause instanceof Error ? cause.message : "Could not start initial sync";
+      await sql`UPDATE account_scan_runs SET status = 'failed', error = ${message.slice(0, 1000)}, finished_at = now() WHERE id = ${accountRunId}`;
+      throw cause;
+    }
     return NextResponse.json({ account: { ...user, followers_count: followersCount, following_count: followingCount, category }, syncQueued: true, initialResearchRunId: initialRun.runId, estimatedMaxCostUsd }, { status: 201 });
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "Could not add X account" }, { status: 503 });

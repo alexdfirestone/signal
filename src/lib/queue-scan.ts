@@ -1,9 +1,10 @@
 import { start } from "workflow/api";
-import { ensureSchema, getSql } from "@/lib/db";
+import { ensureSchema, getSql, refreshScanRun } from "@/lib/db";
 import { trackAccountWorkflow } from "@/workflows/research";
 import { estimateFollowingReadCost, getFollowingScanLimit } from "@/lib/x-api";
+import { randomUUID } from "node:crypto";
 
-export async function queueAllAccountScans(options: { confirmCost?: boolean; maxCostUsd?: number; username?: string; usernames?: string[] } = {}) {
+export async function queueAllAccountScans(options: { confirmCost?: boolean; maxCostUsd?: number; username?: string; usernames?: string[]; trigger?: "cron" | "manual" } = {}) {
   // `vercel env pull` can leave VERCEL_URL defined as an empty string locally.
   // Workflow interprets any defined value as a deployed URL and then builds
   // `https://`, which fails before the first step runs.
@@ -35,9 +36,23 @@ export async function queueAllAccountScans(options: { confirmCost?: boolean; max
     throw new Error(`Scan stopped: estimated twitterapi.io cost is up to $${estimatedMaxCostUsd.toFixed(4)}, above the configured $${options.maxCostUsd.toFixed(2)} budget.`);
   }
   if (!options.confirmCost) return { queued: 0, maxResultsPerAccount: resultLimit, estimatedMaxCostUsd, needsConfirmation: true, runs: [] };
-  const runs = await Promise.all(accounts.map(async (account) => {
-    const run = await start(trackAccountWorkflow, [{ id: account.id as string, username: account.username as string }]);
-    return { username: account.username, runId: run.runId };
-  }));
-  return { queued: runs.length, maxResultsPerAccount: resultLimit, estimatedMaxCostUsd, needsConfirmation: false, runs };
+  const scanRunId = randomUUID();
+  await sql`INSERT INTO scan_runs (id, trigger, account_count) VALUES (${scanRunId}, ${options.trigger ?? "manual"}, ${accounts.length})`;
+  const runs = [];
+  for (const account of accounts) {
+    const accountRunId = randomUUID();
+    await sql`INSERT INTO account_scan_runs (id, scan_run_id, account_id, username)
+      VALUES (${accountRunId}, ${scanRunId}, ${account.id as string}, ${account.username as string})`;
+    try {
+      const run = await start(trackAccountWorkflow, [{ id: account.id as string, username: account.username as string, accountRunId }]);
+      await sql`UPDATE account_scan_runs SET workflow_run_id = ${run.runId} WHERE id = ${accountRunId}`;
+      runs.push({ username: account.username, runId: run.runId, accountRunId });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Could not start workflow";
+      await sql`UPDATE account_scan_runs SET status = 'failed', stage = 'queue', error = ${message.slice(0, 1000)}, finished_at = now() WHERE id = ${accountRunId}`;
+      console.error("scan.queue_failed", { scanRunId, accountRunId, username: account.username, error: message });
+    }
+  }
+  await refreshScanRun(scanRunId);
+  return { scanRunId, queued: runs.length, failedToQueue: accounts.length - runs.length, maxResultsPerAccount: resultLimit, estimatedMaxCostUsd, needsConfirmation: false, runs };
 }
