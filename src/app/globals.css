@@ -72,6 +72,7 @@ h1 { margin: 0; font-size: 40px; font-weight: 700; line-height: 1.2; letter-spac
 .skeleton-block { display: block; height: 10px; border-radius: 3px; background: var(--hover); opacity: .8; animation: skeleton-pulse 1.8s ease-in-out infinite; }
 .skeleton-name { width: 68%; } .skeleton-about { width: 88%; } .skeleton-category { width: 72px; height: 18px; }
 .skeleton-source { width: 76px; } .skeleton-date { width: 58px; }
+.skeleton-website { width: 82%; } .skeleton-location { width: 68%; }
 .skeleton-lede { width: min(320px, 80%); height: 12px; margin-top: 6px; }
 .skeleton-heading { width: 140px; height: 16px; }
 .skeleton-header { width: 60%; height: 10px; }
@@ -81,7 +82,7 @@ h1 { margin: 0; font-size: 40px; font-weight: 700; line-height: 1.2; letter-spac
 .db .quiet { color: var(--text-2); }
 .row-title { font-weight: 500; text-decoration: none; }
 .row-title:hover { text-decoration: underline; text-decoration-color: var(--text-3); text-underline-offset: 3px; }
-.col-name { width: 22%; } .col-tag { width: 150px; } .col-source { width: 150px; } .col-date { width: 100px; } .col-num { width: 96px; }
+.col-name { width: 19%; } .col-website { width: 130px; } .col-tag { width: 120px; } .col-location { width: 110px; } .col-source { width: 110px; } .col-date { width: 80px; } .col-num { width: 96px; }
 .col-following { width: 110px; } .col-type { width: 160px; } .col-scan { width: 140px; } .col-action { width: 40px; }
 .person { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .person span { overflow: hidden; text-overflow: ellipsis; }
@@ -151,7 +152,8 @@ select.tag:disabled { opacity: .6; cursor: default; }
   h1 { font-size: 32px; }
   .lede { margin-bottom: 24px; }
   .hide-sm { display: none; }
-  .col-name { width: 38%; }
+  .col-name { width: 32%; }
+  .col-website { width: 30%; }
   .col-following { width: 88px; }
   .col-type { width: 100px; }
   .search input { width: 110px; }
