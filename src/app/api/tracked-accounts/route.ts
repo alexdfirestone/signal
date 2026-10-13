@@ -20,6 +20,10 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
+    // An empty URL from `vercel env pull` breaks local workflow dispatch.
+    if (process.env.NODE_ENV !== "production" && !process.env.VERCEL_URL?.trim()) {
+      delete process.env.VERCEL_URL;
+    }
     const body = await request.json() as { username?: string; category?: string; confirmCost?: boolean };
     const username = body.username?.trim().replace(/^@/, "");
     const category = body.category ?? "person";
